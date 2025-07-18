@@ -1,4 +1,3 @@
-#!/usr/bin/env python3
 """
 Extensive test suite for protdict.Data class and supporting utilities.
 """
@@ -178,6 +177,10 @@ def test_functional_utils():
 
 
 def main():
+    import time
+    libname:str = "protodict"
+    ver:str = "0.0.2"
+    start_time = time.perf_counter()
     test_basic()
     test_tags_and_kwargs()
     test_typing()
@@ -191,6 +194,9 @@ def main():
     test_keys_by_tag_and_bundle()
     test_set_all_and_rem_all_typings()
     test_functional_utils()
+    end_time = time.perf_counter()
+    elapsed_time = end_time-start_time
+    print(f"===| Test Suite for {libname} on v.{ver} Completed! -> Elapsed Time: {elapsed_time:.4f} seconds |===")
 
 
 if __name__ == "__main__":

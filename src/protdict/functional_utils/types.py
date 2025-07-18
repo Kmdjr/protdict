@@ -1,21 +1,16 @@
 from _collections_abc import Iterable
 
+from collections.abc import Iterable
+from .nums import clamp
+
 def multi_isinstance(items: Iterable, valid_types: Iterable, raise_val_error: bool = False) -> bool:
     """
     Checks whether each item in `items` is an instance of the corresponding type in `valid_types`.
 
-    If `valid_types` is shorter than `items`, the last type in `valid_types` is reused for remaining items.
-    If a type in `valid_types` is a list or tuple, `isinstance` will check against all contained types.
-
-    Args:
-        items (Iterable): Items to check.
-        valid_types (Iterable): Expected types, one per item (or one type reused if shorter).
-        raise_val_error (bool): If True, raises ValueError on invalid inputs.
-
-    Returns:
-        bool: True if all items are valid instances, False otherwise.
+    If `valid_types` is shorter than `items`, the last type in `valid_types` is reused.
+    `valid_types` entries may be a single type or a tuple/list of types.
     """
-    from .nums import clamp
+    # 1) Basic sanity checks
     if not isinstance(items, Iterable) or isinstance(items, dict):
         if raise_val_error:
             raise ValueError("`items` must be a non-dict iterable.")
@@ -25,17 +20,35 @@ def multi_isinstance(items: Iterable, valid_types: Iterable, raise_val_error: bo
             raise ValueError("`valid_types` must be a non-dict iterable.")
         return False
 
+    # 2) Turn into indexable list
     valid_types = list(valid_types)
-    for index, val in enumerate(items):
-        type_index = clamp(index, 0, len(valid_types) - 1)
-        expected_type = valid_types[type_index]
-        if isinstance(expected_type, (list, tuple)):
-            if not isinstance(val, tuple(expected_type)):
-                return False
+    if not valid_types:
+        if raise_val_error:
+            raise ValueError("`valid_types` must contain at least one type.")
+        return False
+
+    # 3) Check each item
+    for idx, val in enumerate(items):
+        # pick the matching expected_type (or last one if we run out)
+        ti = clamp(idx, 0, len(valid_types) - 1)
+        expected = valid_types[ti]
+
+        # normalize to a tuple of types
+        if isinstance(expected, (list, tuple)):
+            type_tuple = tuple(expected)
+        elif isinstance(expected, type):
+            type_tuple = (expected,)
         else:
-            if not isinstance(val, expected_type):
-                return False
+            if raise_val_error:
+                raise ValueError(f"Invalid entry in valid_types: {expected!r}")
+            return False
+
+        # final isinstance check
+        if not isinstance(val, type_tuple):
+            return False
+
     return True
+
 
 
 def is_type_exclude(obj, types: tuple, exclusions: tuple) -> bool:

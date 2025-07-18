@@ -64,12 +64,16 @@ class Data:
                 self.add_typing(k, type(v))
 
     def hasprop(self, name: str, include_protected: bool = True) -> bool:
-        """Return True if `name` exists. `include_protected` excludes protected attrs."""
-        allowed = clean_values(
-            self.__dict__.keys(),
-            mergel(self._banned_attr, [] if include_protected else self._protected_attr)
-        )
-        return name in allowed
+        """
+        Return True if `name` exists as an attribute (and isn't banned,
+        and if include_protected is False. also isn't in protected_attrs).
+        """
+        if name in self._banned_attr:
+            return False
+        if not include_protected and name in self._protected_attr:
+            return False
+        return hasattr(self, name)
+
 
     def add_typing(self, property: str, type_lock: type = None) -> bool:
         """Set a type lock on `property`. `type_lock` (type) if None inferred. Returns True if applied, False otherwise."""

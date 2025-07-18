@@ -2,6 +2,8 @@
 
 \\
 
+Verson: 0.0.4
+
 A flexible key-value store for Python with fine-grained protection, type locking, and utility operations. Ideal when you need a dictionary-like object but want built-in safeguards against accidental overwrites, deletions, or type mismatches.
 
 ---

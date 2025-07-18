@@ -16,8 +16,9 @@ class Data:
         self._og_list = data_dictionary
         self._og_protects = dict(kwargs)
         self._types = {}
+        self._frozen:bool = False
         self._banned_attr = [
-            "_og_list", "_og_protects", "_banned_attr", "_protected_attr", "_types"
+            "_og_list", "_og_protects", "_banned_attr", "_protected_attr", "_types","_frozen"
         ]
         self._protected_attr = list(kwargs.keys())
 
@@ -77,6 +78,8 @@ class Data:
 
     def add_typing(self, property: str, type_lock: type = None) -> bool:
         """Set a type lock on `property`. `type_lock` (type) if None inferred. Returns True if applied, False otherwise."""
+        if self.isfrozen():
+            raise RuntimeError("Data object is frozen and cannot be modified")
         if not multi_isinstance([property, type_lock], [str, (None, type)]):
             raise ValueError
         if property in self.__dict__.keys() and property not in self._banned_attr:
@@ -89,6 +92,8 @@ class Data:
     
     def remove_typing(self, property: str) -> bool:
         """Remove type lock for `property`. Returns True if removed, False otherwise."""
+        if self.isfrozen():
+            raise RuntimeError("Data object is frozen and cannot be modified")
         if not isinstance(property, str):
             raise ValueError(property)
         if property in self._types.keys():
@@ -98,6 +103,8 @@ class Data:
     
     def set_all_typings(self, protected_only: bool = False) -> int:
         """Lock types for all properties. `protected_only` (bool) if True only protected. Returns int count."""
+        if self.isfrozen():
+            raise RuntimeError("Data object is frozen and cannot be modified")
         if not isinstance(protected_only, bool):
             raise ValueError(protected_only)
         count = 0
@@ -111,6 +118,8 @@ class Data:
 
     def rem_all_typings(self, keep_protected: bool = True) -> int:
         """Unlock types for all. `keep_protected` (bool) if True keep protected. Returns int count."""
+        if self.isfrozen():
+            raise RuntimeError("Data object is frozen and cannot be modified")
         if not isinstance(keep_protected, bool):
             raise ValueError(keep_protected)
         count = 0
@@ -130,6 +139,8 @@ class Data:
 
     def oset(self, attr: str, newval) -> bool:
         """Overwrite `attr` with `newval`. Returns True if existed, False otherwise."""
+        if self.isfrozen():
+            raise RuntimeError("Data object is frozen and cannot be modified")
         if hasattr(self, attr):
             if self._check_for_type(attr,newval):
                 setattr(self, attr, newval)
@@ -147,6 +158,8 @@ class Data:
 
     def erase(self,attr:str) -> bool:
         """Deletes `attr`. Returns True if exists, False otherwise."""
+        if self.isfrozen():
+            raise RuntimeError("Data object is frozen and cannot be modified")
         if hasattr(self,attr) and not self._procheck(attr):
             self._del_attr(attr,False)
             delattr(self,attr)
@@ -155,6 +168,8 @@ class Data:
 
     def oerase(self, attr: str) -> bool:
         """Delete any `attr` including protected ones. Returns True if existed, False otherwise."""
+        if self.isfrozen():
+            raise RuntimeError("Data object is frozen and cannot be modified")
         if hasattr(self, attr):
             self._del_attr(attr,True)
             delattr(self, attr)
@@ -163,6 +178,8 @@ class Data:
 
     def set(self, name: str, val) -> bool:
         """Set `name` to `val` unless protected. Returns True if set, False otherwise."""
+        if self.isfrozen():
+            raise RuntimeError("Data object is frozen and cannot be modified")
         if not self._procheck(name):
             if self._check_for_type(name,val):
                 setattr(self, name, val)
@@ -172,6 +189,8 @@ class Data:
     
     def sets(self, **kwargs) -> int:
         """Set multiple `kwargs`. Returns int count of set."""
+        if self.isfrozen():
+            raise RuntimeError("Data object is frozen and cannot be modified")
         count = 0
         for k, v in kwargs.items():
             if self.set(k, v):
@@ -180,6 +199,8 @@ class Data:
     
     def osets(self, **kwargs) -> int:
         """Overwrite multiple `kwargs`. Returns int count of set."""
+        if self.isfrozen():
+            raise RuntimeError("Data object is frozen and cannot be modified")
         count = 0
         for k, v in kwargs.items():
             if self.oset(k, v):
@@ -188,6 +209,8 @@ class Data:
 
     def protect(self, name: str) -> bool:
         """Protect `name`. Returns True if newly protected, False otherwise."""
+        if self.isfrozen():
+            raise RuntimeError("Data object is frozen and cannot be modified")
         if not self._procheck(name):
             self._protected_attr.append(name)
             return True
@@ -195,6 +218,8 @@ class Data:
 
     def unprotect(self, name: str) -> bool:
         """Unprotect `name` if not from original kwargs. Returns True if unprotected, False otherwise."""
+        if self.isfrozen():
+            raise RuntimeError("Data object is frozen and cannot be modified")
         if self._procheck(name) and not in_lower_list(name, self._og_protects.keys()):
             self._protected_attr = [
                 attr for attr in self._protected_attr if attr.lower() != name.lower()
@@ -204,6 +229,8 @@ class Data:
 
     def ounprotect(self, name: str) -> bool:
         """Force unprotect `name`. Returns True if unprotected, False otherwise."""
+        if self.isfrozen():
+            raise RuntimeError("Data object is frozen and cannot be modified")
         if self._procheck(name):
             self._protected_attr = [
                 attr for attr in self._protected_attr if attr.lower() != name.lower()
@@ -213,6 +240,8 @@ class Data:
 
     def grab(self, name: str, full_del: bool = False, default=None):
         """Get `name` then delete or null. `full_del` (bool) if True delete. Returns value or default."""
+        if self.isfrozen():
+            raise RuntimeError("Data object is frozen and cannot be modified")
         if self.hasprop(name, False):
             val = getattr(self, name)
             if full_del:
@@ -224,6 +253,8 @@ class Data:
 
     def ograb(self, name: str, full_del: bool = False, default=None):
         """Get any `name` then delete or null. `full_del` (bool) if True delete. Returns value or default."""
+        if self.isfrozen():
+            raise RuntimeError("Data object is frozen and cannot be modified")
         if self.hasprop(name, True):
             val = getattr(self, name)
             if full_del:
@@ -269,6 +300,8 @@ class Data:
         protect_new_added_keys: bool = False
     ) -> bool:
         """Merge `new_data`. `overwrite_current`, `protect_current`, `protect_new_added_keys` (bool). Returns True if changed."""
+        if self.isfrozen():
+            raise RuntimeError("Data object is frozen and cannot be modified")
         changed = False
         for key, val in new_data.items():
             exists = self.hasprop(key, include_protected=False)
@@ -293,6 +326,8 @@ class Data:
         overwrite: bool = False
     ) -> bool:
         """Absorb from `other`. `include_protected`, `overwrite` (bool). Returns True if changed."""
+        if self.isfrozen():
+            raise RuntimeError("Data object is frozen and cannot be modified")
         if not isinstance(other, Data):
             raise ValueError("Argument must be a Data object.")
 
@@ -315,7 +350,7 @@ class Data:
             return getattr(self,name)
         return default
     
-    def keys(self,include_protected:bool=True) -> list:
+    def keys(self,include_protected:bool=True) -> list[str]:
         """Returns a list of property names."""
         return list(self.as_dict(include_protected).keys())
     
@@ -408,6 +443,8 @@ class Data:
 
     def swap(self, property: str, new_val, default=None):
         """Set `property` to `new_val`. Returns old value or `default` if it did not exist."""
+        if self.isfrozen():
+            raise RuntimeError("Data object is frozen and cannot be modified")
         existed = property in self.__dict__
         old = self.__dict__.get(property, None)
         if self._check_for_type(property,new_val):
@@ -415,6 +452,16 @@ class Data:
         else:
             self._typederr(property,new_val)
         return old if existed else default
+
+    def freeze(self):
+        """Makes all Data read-only. Use .unfreeze() to allow edits again."""
+        if self._frozen: print("Class already frozen.")
+        else:self._frozen = True
+    
+    def unfreeze(self):
+        """Opposite of freeze(), allows for edits."""
+        if not self._frozen: print("Class already not frozen.")
+        else:self._frozen = False
     
     def _check_for_type(self,property:str,new_val) -> bool:
         """Internal method to check if `new_val` is the correct type if `property` is locked. returns bool."""
@@ -431,17 +478,31 @@ class Data:
         else:
             print(f"{property} has locked type as: {self._types[property]} but new value has type: {type(new)}.")
     
+    def isfrozen(self) -> bool:
+        """Returns `True` if class is frozen, else `False`."""
+        return self._frozen
+    
+    def canedit(self) -> bool:
+        """Returns `True` if class is not frozen, else `False`. """
+        return not self._frozen
+
     def __getitem__(self, key):
         """Return value for `key` (same as `get`)."""
         return getattr(self, key)
 
     def __setitem__(self, key, value):
         """Set `key` to `value` (respects protection & typing)."""
-        self.set(key, value)
+        if not self.isfrozen():
+            self.set(key,value)
+        else: 
+            raise RuntimeError("Data object is frozen and cannot be modified")
 
     def __delitem__(self, key):
         """Delete `key` (respects protection)."""
-        self.erase(key)
+        if not self.isfrozen():
+            self.erase(key)
+        else: 
+            raise RuntimeError("Data object is frozen and cannot be modified")
 
     def __contains__(self, key) -> bool:
         """Return True if `key` exists (and is not protected when checking)."""
@@ -467,16 +528,13 @@ class Data:
         """Return (key, value) pairs as a view."""
         return self.as_dict().items()
 
-    def keys(self) -> list[str]:
-        """Return list of property names."""
-        return list(self.as_dict().keys())
-
     def values(self) -> list:
         """Return list of property values."""
         return list(self.as_dict().values())
 
     def clear(self):
         """Remove all non‑banned, non‑protected properties."""
+        if self.isfrozen(): raise RuntimeError("Data object is frozen and cannot be modified")
         for k in list(self.as_dict().keys()):
             self.erase(k)
 
@@ -485,6 +543,7 @@ class Data:
         Update from `other` dict (like dict.update),
         respecting protection & typing. Returns None.
         """
+        if self.isfrozen(): raise RuntimeError("Data object is frozen and cannot be modified")
         for k, v in other.items():
             self.set(k, v)
     

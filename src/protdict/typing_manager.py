@@ -104,7 +104,7 @@ class TypeManager:
         elif hasattr(value, "__dict__"):
             return self._exporters[dict.__name__](vars(value))  # shallow copy of instance dict
         return {"__value__":value,"_type":type(value).__name__}  # fallback to raw
-
+ 
     def deserialize(self, serialized_dict:dict[str]) -> Any:
         """
         If type_ref is a class, grab its __name__; if string, use it directly.

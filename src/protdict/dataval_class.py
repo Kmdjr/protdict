@@ -1,6 +1,7 @@
 import time
-from typing import Any, Union, List, Dict
+from typing import Any, Union, List, Dict, Callable
 from .typing_manager import get_type_manager
+from .validation_manager import get_tag_validator
 
 class DataVal:
     """
@@ -8,9 +9,9 @@ class DataVal:
     """
 
     def __init__( self, value: Any, *, essential: bool = False, protected: bool = False, frozen: bool = False, 
-        hidden: bool = False, types:str|list[str]|type|list[type]|None = None, validator:str|list[str]|None = None, 
+        hidden: bool = False, types:str|list[str]|type|list[type]|None = None, 
         description: str = "", source: str = "", metadata: Any = None, tags:str|list[str]|None = None ):
-
+        
         tm = get_type_manager()
 
         # ——— 2) Validate simple flags ———
@@ -25,13 +26,12 @@ class DataVal:
 
         # ——— 3) Normalize & validate tags ———
         if tags is None:
-            self.tags: List[str] = []
-        elif isinstance(tags, str):
-            self.tags = [tags]
-        elif isinstance(tags, list) and all(isinstance(t, str) for t in tags):
-            self.tags = tags
-        else:
-            raise TypeError("'tags' must be a string, list of strings, or None")
+            self._tags:dict[str] = {}
+        elif isinstance(tags,str):
+            self._tags = {tags:{"version":0,"funcs":[]}}
+        elif isinstance(tags,list) and all(isinstance(t,str) for t in tags):
+            self._tags = {t:{"version":0,"funcs":[]} for t in tags}
+        self._check_tag_validators()
 
         # ——— 4) Normalize & validate runtime type constraints ———
         if types is None:
@@ -49,16 +49,6 @@ class DataVal:
                 "'types' must be a type, list of types, string, list of strings, or None"
             )
 
-        # ——— 5) Normalize & validate validators ———
-        if validator is None:
-            self.validators: List[str] = []
-        elif isinstance(validator, str):
-            self.validators = [validator]
-        elif isinstance(validator, list) and all(isinstance(v, str) for v in validator):
-            self.validators = validator
-        else:
-            raise TypeError("'validator' must be a string, list of strings, or None")
-
         # ——— 6) Enforce the types constraint on the (possibly imported) value ———
         if self.types and not isinstance(value, tuple(self.types)):
             raise TypeError(
@@ -66,7 +56,7 @@ class DataVal:
             )
 
         # ——— 7) Finally assign all fields ———
-        self.value = value
+        self._value = value
         self.essential = essential
         self.protected = protected
         self.frozen = frozen
@@ -74,6 +64,26 @@ class DataVal:
         self.description = description
         self.source = source
         self.metadata = metadata
+
+    ## Property Setters and Dunders:
+
+    @property
+    def value(self):
+        return self._value
+    
+    @value.setter
+    def value(self,new_val):
+        if self.frozen:
+            raise ValueError("Value is frozen. Use .unfreeze() method to make it not read-only")
+        if self.essential:
+            raise ValueError("Value is marked as essential. Use o* family methods to overwrite value or remove it from essentials.")
+        self._type_check(new_val)
+        self._validate(new_val)
+        self._value = new_val
+    
+    @property
+    def tags(self):
+        return [tag for tag in self._tags.keys()]
 
     def export(self) -> Dict[str, Any]:
         """
@@ -83,7 +93,7 @@ class DataVal:
         4) Emit all metadata + types (as str list) + validators
         """
         tm = get_type_manager()
-        type_name = self._type or type(self.value).__name__
+        type_name = type(self.value).__name__
 
         # 1. serialize value
         raw = tm.serialize(self.value)
@@ -100,8 +110,42 @@ class DataVal:
             "metadata": self.metadata,
             "tags": self.tags,
             "types": tm.reverse(self.types),
-            "validators": self.validators,
         }
+
+    def _check_tag_validators(self):
+        tv = get_tag_validator()
+        for name, info in self._tags.items():
+            if info.get("version") < tv.version(name):
+                updated = tv.get_tag_info(name)
+                info["version"] = updated[1]
+                info["funcs"] = updated[0]
+
+    def _validate(self,new_val):
+        self._check_tag_validators()
+        for tag,info in self._tags.items():
+            for func in info.get("funcs"):
+                try:
+                    result = func(new_val)
+                except Exception as e:
+                    raise ValueError(f"Validator for tag '{tag}' raised and exception: {e}")
+                if result is False:
+                    raise ValueError(f"Validation failed for the tag '{tag}' with value: {new_val}")
+                    
+
+    def _type_check(self,new_val):
+        if self.types:
+            if type(new_val) not in self.types:
+                raise TypeError("Expected new value to be of type: "+", ".join(self.types)+" but got: "+type(new_val).__name__)
+    
+    def get_tags(self):
+        return [t for t in self._tags.keys()]
+    
+    def set_tag(self,tag:str):
+        if not isinstance(tag,str):
+            raise ValueError("Expected 'tag' as type 'str'. got type: ",type(tag).__name__,".")
+        self._tags[tag] = 0
+
+        
 
     @classmethod
     def create(cls, data: Dict[str, Any]) -> "DataVal":
@@ -126,10 +170,71 @@ class DataVal:
             frozen=data.get("frozen", False),
             hidden=data.get("hidden", False),
             types=constraints,
-            validator=data.get("validators", []),
             description=data.get("description", ""),
             source=data.get("source", ""),
             metadata=data.get("metadata", None),
             _type=type_name,
             tags=data.get("tags", []),
         )
+
+
+
+
+
+
+
+
+
+    ## CLASS DUNDERS ##
+    def __setattr__(self, name, value):
+        # Internal safe paths (used in __init__ or internally)
+        if name in {
+            "_value", "_tags", "_type", "_tag_validators",
+            "_tag_versions", "_type_check", "_validate", "_check_tag_validators"
+        }:
+            super().__setattr__(name, value)
+            return
+
+        # Redirect .value → use the property (calls setter, handles validation)
+        if name == "value":
+            object.__setattr__(self, name, value)
+            return
+
+        # Block setting frozen — force .freeze() or .unfreeze()
+        if name == "frozen":
+            raise AttributeError("Cannot assign 'frozen' directly. Use .freeze() or .unfreeze().")
+
+        # Block essential — must use overwrite methods
+        if name == "essential":
+            raise AttributeError("Cannot assign 'essential' directly. Use overwrite-safe methods.")
+
+        # Block setting protected unless essential is False
+        if name == "protected":
+            if not isinstance(value, bool):
+                raise TypeError(f"Expected bool for 'protected', got {type(value).__name__}")
+            if getattr(self, "essential", False):
+                raise AttributeError("Cannot modify 'protected' while 'essential' is True.")
+            super().__setattr__(name, value)
+            return
+
+        # Block setting hidden unless valid bool
+        if name == "hidden":
+            if not isinstance(value, bool):
+                raise TypeError(f"Expected bool for 'hidden', got {type(value).__name__}")
+            super().__setattr__(name, value)
+            return
+
+        # Do not allow direct type reassignment
+        if name == "types":
+            raise AttributeError("Do not assign 'types' directly. Use .set_types() instead.")
+
+        # Allow safe descriptive fields
+        if name in {"description", "source", "metadata"}:
+            super().__setattr__(name, value)
+            return
+
+        # Everything else is blocked
+        raise AttributeError(f"Attribute '{name}' cannot be set directly.")
+
+
+            

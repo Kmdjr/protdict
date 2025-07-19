@@ -73,3 +73,75 @@ def is_type_exclude(obj, types: tuple, exclusions: tuple) -> bool:
     if isinstance(obj, types) and not isinstance(obj, exclusions):
         return True
     return False
+
+def resolve_types(type_names: list[str]) -> list[type]:
+    """
+    Converts a list of type name strings to actual Python type objects.
+
+    - Supports basic built-in types: int, float, str, bool, list, dict, set, tuple, Any
+    - Ignores unknown type names
+    - Returns an empty list if nothing is valid
+    """
+    from typing import Any
+    known_types = {
+        "int": int,
+        "float": float,
+        "str": str,
+        "bool": bool,
+        "list": list,
+        "dict": dict,
+        "set": set,
+        "tuple": tuple,
+        "Any": Any
+    }
+
+    resolved = []
+    for name in type_names:
+        t = known_types.get(name)
+        if t:
+            resolved.append(t)
+        # You can optionally log or raise for unknown types if needed
+
+    return resolved
+        
+class PermissionError(Exception):
+    from ..dataval_class import DataVal
+    from ..protdict_class import Data
+    def __init__(self,obj:Data|DataVal, *, frozen:bool=False,protected:bool=False,essential:bool=False):
+        self.obj = obj
+        self.pro:bool = protected
+        self.ess:bool = essential
+        self.f:bool = frozen
+        self.message = ""
+        if self.f:
+            self.message = " is frozen and can not be editted. use .unfreeze() to unfreeze the value."
+        else:
+            if self.ess:
+                self.message += " is an essential"
+            if self.pro:
+                self.message += "and protected" if self.message != "" else " is a protected"
+            if self.message != "":
+                self.message += " value. unprotect with .unprotect() or if essential, override with .ounprotect()"
+    def __str__(self):
+        return f"{self.obj.__name__} {self.message}"
+
+class DataParsingError(Exception):
+    def __init__(self,serializing_obj,typen,_type,converter,val):
+        self.obj = serializing_obj
+        self.fails = {
+            "type_name": bool(typen),
+            "type" : bool(_type),
+            "converter function" :bool(converter),
+            "value" : bool(val)
+        }
+        
+
+    def __str__(self):
+        return f"Error while parsing: {str(self.obj)}. Failed at resolving: "+", ".join(key for key in self.fails.keys() if not self.fails[key])
+
+class DataSerializationError(Exception):
+    def __init__(self,serializing_obj):
+        self.obj = serializing_obj
+    
+    def __str__(self):
+        return f"Error while serializing: {str(self.obj)}."
